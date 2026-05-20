@@ -21,10 +21,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 
+const allowedOrigins = process.env.CLIENT_URL 
+  ? [process.env.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173']
+  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
 // CORS for Vite dev server
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   })
 );
@@ -77,7 +81,7 @@ app.get('/health', (_req, res) => {
 // ---- Socket.IO Setup ----
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
   maxHttpBufferSize: 10 * 1024 * 1024, // 10MB
