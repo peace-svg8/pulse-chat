@@ -1,5 +1,5 @@
 {
-  "name": "chat-server",
+  "name": "pulse-chat-server",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
