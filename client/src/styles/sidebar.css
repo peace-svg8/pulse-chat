@@ -240,3 +240,55 @@
   font-weight: 500;
   color: var(--text-secondary);
 }
+
+/* Sidebar Footer & Logout */
+.sidebar-footer {
+  padding: 20px;
+  border-top: 1px solid var(--border-default);
+  margin-top: auto;
+  background: rgba(10, 10, 40, 0.95);
+  z-index: 10;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.sidebar-close-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .sidebar-close-btn {
+    display: block;
+  }
+  .sidebar-footer {
+    padding: 16px;
+    padding-bottom: 32px; /* Extra padding for bottom navigation bars on mobile */
+  }
+}
+

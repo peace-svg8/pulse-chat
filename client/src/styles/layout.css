@@ -90,15 +90,21 @@
 @media (max-width: 768px) {
   .chat-layout { grid-template-columns: 1fr; }
   .mobile-menu-btn { display: flex; }
-  .chat-header { padding-left: 64px; }
+  .chat-header { 
+    padding: 12px 16px 12px 64px; 
+    min-height: 60px;
+  }
   .sidebar {
     position: fixed;
-    left: -300px;
+    left: -100%;
+    width: 85%;
+    max-width: 320px;
     top: 0;
     bottom: 0;
     z-index: var(--z-modal);
     transition: left var(--transition-base);
   }
   .sidebar.open { left: 0; }
+  .sidebar-overlay { display: none; }
   .sidebar-overlay.visible { display: block; }
 }

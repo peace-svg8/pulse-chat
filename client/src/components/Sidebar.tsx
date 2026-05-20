@@ -39,6 +39,11 @@ export default function Sidebar({ isOpen, onClose, onCreateRoom }: SidebarProps)
             <div className="sidebar-brand-icon">💬</div>
             <span className="sidebar-brand-text">PulseChat</span>
           </div>
+          <button className="sidebar-close-btn" onClick={onClose} aria-label="Close sidebar">
+            ✕
+          </button>
+        </div>
+        <div style={{ padding: '0 20px', marginBottom: '8px' }}>
           {currentUser && (
             <div className="sidebar-user">
               <div className="sidebar-user-avatar">{currentUser.avatar}</div>
@@ -120,23 +125,8 @@ export default function Sidebar({ isOpen, onClose, onCreateRoom }: SidebarProps)
         </div>
         
         {/* Footer */}
-        <div className="sidebar-footer" style={{ padding: '20px', borderTop: '1px solid var(--border-default)', marginTop: 'auto' }}>
-          <button 
-            onClick={logout} 
-            style={{ 
-              width: '100%', 
-              padding: '10px', 
-              background: 'rgba(239, 68, 68, 0.1)', 
-              color: 'var(--danger)', 
-              border: '1px solid rgba(239, 68, 68, 0.2)', 
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer',
-              fontWeight: 600,
-              transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
-            onMouseOut={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
-          >
+        <div className="sidebar-footer">
+          <button className="logout-btn" onClick={logout}>
             Log Out
           </button>
         </div>
