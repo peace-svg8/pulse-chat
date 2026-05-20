@@ -364,7 +364,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       
       socket.connect();
       return new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          socket.disconnect();
+          reject(new Error('Connection timed out. Is the backend server running?'));
+        }, 5000);
+
         socket.emit('auth:signup', { email, username, passwordRaw, avatar, publicKey: publicKeyStr, encryptedPrivateKey: encryptedPrivKeyStr }, (res: any) => {
+          clearTimeout(timeout);
           if (res.success && res.data) {
             privateKeyRef.current = keyPair.privateKey;
             dispatch({ type: 'SET_USER', payload: res.data.user });
@@ -384,7 +390,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, passwordRaw: string) => {
     socket.connect();
     return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        socket.disconnect();
+        reject(new Error('Connection timed out. Is the backend server running?'));
+      }, 5000);
+
       socket.emit('auth:login', { email, passwordRaw }, async (res: any) => {
+        clearTimeout(timeout);
         if (res.success && res.data) {
           try {
             const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
