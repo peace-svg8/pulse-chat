@@ -5,7 +5,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useChat } from '../context/ChatContext';
 
-const SERVER = 'http://localhost:3001';
+const SERVER = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 interface Props {
   onEmojiToggle: () => void;

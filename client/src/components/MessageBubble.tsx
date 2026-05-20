@@ -22,7 +22,7 @@ function formatFileSize(bytes?: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-const SERVER = 'http://localhost:3001';
+const SERVER = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 export default function MessageBubble({ message, isDM }: Props) {
   const { state } = useChat();
