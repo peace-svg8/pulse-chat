@@ -1,0 +1,280 @@
+/* =============================================
+   DESIGN SYSTEM — Live Chat App
+   Premium Dark Theme with Glassmorphism
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ---- CSS Custom Properties ---- */
+:root {
+  /* Colors - Deep Space Theme */
+  --bg-primary: #07071a;
+  --bg-secondary: #0d0d2b;
+  --bg-tertiary: #13133a;
+  --bg-elevated: #1a1a4e;
+  
+  /* Glass surfaces */
+  --glass-bg: rgba(20, 20, 65, 0.45);
+  --glass-bg-hover: rgba(30, 30, 80, 0.55);
+  --glass-border: rgba(120, 110, 255, 0.15);
+  --glass-border-hover: rgba(120, 110, 255, 0.3);
+  
+  /* Accent */
+  --accent-primary: #7c6aff;
+  --accent-secondary: #a78bfa;
+  --accent-glow: rgba(124, 106, 255, 0.3);
+  --accent-gradient: linear-gradient(135deg, #7c6aff 0%, #a78bfa 50%, #c084fc 100%);
+  
+  /* Status colors */
+  --online: #22c55e;
+  --online-glow: rgba(34, 197, 94, 0.4);
+  --offline: #6b7280;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #3b82f6;
+  
+  /* Text */
+  --text-primary: #f1f0ff;
+  --text-secondary: #a5a3c7;
+  --text-muted: #6b6890;
+  --text-accent: #c4b5fd;
+  
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(124, 106, 255, 0.15);
+  
+  /* Spacing */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+  
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-xs: 0.7rem;
+  --font-size-sm: 0.8rem;
+  --font-size-base: 0.9rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.15rem;
+  --font-size-xl: 1.4rem;
+  --font-size-2xl: 1.75rem;
+  --font-size-3xl: 2.25rem;
+  
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* Z-index scale */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* ---- Reset & Base ---- */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* Animated background gradient */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(124, 106, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 80% at 80% 90%, rgba(167, 139, 250, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(192, 132, 252, 0.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: var(--z-base);
+  height: 100vh;
+}
+
+/* ---- Scrollbar Styling ---- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 106, 255, 0.25);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 106, 255, 0.4);
+}
+
+/* ---- Utility Classes ---- */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-hover:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+}
+
+/* ---- Button Base ---- */
+button {
+  font-family: var(--font-family);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input,
+textarea {
+  font-family: var(--font-family);
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text-primary);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+a {
+  color: var(--accent-secondary);
+  text-decoration: none;
+}
+
+/* ---- Animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px var(--accent-glow); }
+  50% { box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(124, 106, 255, 0.1); }
+}
+
+.animate-fadeIn { animation: fadeIn var(--transition-base) ease-out; }
+.animate-fadeInUp { animation: fadeInUp var(--transition-slow) ease-out; }
+.animate-fadeInDown { animation: fadeInDown var(--transition-base) ease-out; }
+.animate-slideInLeft { animation: slideInLeft var(--transition-slow) ease-out; }
+.animate-slideInRight { animation: slideInRight var(--transition-slow) ease-out; }
+.animate-scaleIn { animation: scaleIn var(--transition-spring) ease-out; }

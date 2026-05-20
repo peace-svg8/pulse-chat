@@ -1,0 +1,110 @@
+/* =============================================
+   Component Styles (Modals, Emoji, etc)
+   ============================================= */
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  animation: fadeIn 0.2s ease-out;
+  padding: 20px;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  border-radius: var(--radius-xl);
+  background: rgba(15, 15, 50, 0.85);
+  backdrop-filter: blur(30px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.modal-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-default);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  transition: all var(--transition-fast);
+}
+
+.modal-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(124, 106, 255, 0.15);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.modal-btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.modal-btn.primary {
+  background: var(--accent-gradient);
+  color: white;
+}
+
+.modal-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(124, 106, 255, 0.3);
+}
+
+.modal-btn.secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.modal-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Emoji picker wrapper */
+.emoji-picker-wrapper {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  z-index: var(--z-dropdown);
+  animation: fadeInUp 0.2s ease-out;
+}
+
+/* Override emoji-mart dark theme */
+em-emoji-picker {
+  --rgb-background: 15, 15, 50;
+  --rgb-input: 255, 255, 255;
+  --rgb-color: 241, 240, 255;
+}
