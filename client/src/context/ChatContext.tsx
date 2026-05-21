@@ -359,7 +359,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }));
 
         const myDMs = decryptedMessages.filter(dm => dm.senderId === state.activeDMUser!.id || dm.receiverId === state.activeDMUser!.id);
-        dispatch({ type: 'SET_DM_HISTORY', payload: { userId: state.activeDMUser.id, messages: myDMs } });
+        dispatch({ type: 'SET_DM_HISTORY', payload: { userId: state.activeDMUser!.id, messages: myDMs } });
       };
       fetchDMs();
     }
