@@ -69,9 +69,6 @@ export default function MessageInput({ onEmojiToggle, showEmoji }: Props) {
     setText((prev) => prev + emoji);
   };
 
-  // Expose insertEmoji globally for emoji picker
-  (window as any).__insertEmoji = insertEmoji;
-
   const placeholder = state.chatMode === 'dm' && state.activeDMUser
     ? `Message ${state.activeDMUser.username}...`
     : `Message #${state.activeRoomName}...`;

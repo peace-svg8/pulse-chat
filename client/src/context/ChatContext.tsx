@@ -223,7 +223,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (stateRef.current.currentUser) {
-        updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
+        updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() }).catch((err) => {
+          console.error('Failed to update offline status:', err);
+        });
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
