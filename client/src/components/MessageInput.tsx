@@ -5,7 +5,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { useChat } from '../context/ChatContext';
 
-const SERVER = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 interface Props {
   onEmojiToggle: () => void;
@@ -22,32 +21,7 @@ export default function MessageInput({ onEmojiToggle, showEmoji }: Props) {
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
 
-    // Upload file if pending
-    if (pendingFile) {
-      setUploading(true);
-      try {
-        const formData = new FormData();
-        formData.append('file', pendingFile);
-        const res = await fetch(`${SERVER}/upload`, { method: 'POST', body: formData });
-        const data = await res.json();
 
-        const isImage = pendingFile.type.startsWith('image/');
-        const type = isImage ? 'image' as const : 'file' as const;
-
-        if (state.chatMode === 'dm' && state.activeDMUser) {
-          sendDM(state.activeDMUser.id, trimmed || pendingFile.name, type, data.name, data.size, data.url);
-        } else {
-          sendMessage(trimmed || pendingFile.name, type, data.name, data.size, data.url);
-        }
-      } catch (err) {
-        console.error('Upload failed:', err);
-      }
-      setUploading(false);
-      setPendingFile(null);
-      setText('');
-      stopTyping();
-      return;
-    }
 
     if (!trimmed) return;
 
@@ -122,9 +96,7 @@ export default function MessageInput({ onEmojiToggle, showEmoji }: Props) {
           disabled={uploading}
         />
         <div className="input-actions">
-          <button className="input-action-btn" onClick={handleFileClick} title="Attach file">
-            📎
-          </button>
+
           <button
             className={`input-action-btn ${showEmoji ? 'active' : ''}`}
             onClick={onEmojiToggle}
