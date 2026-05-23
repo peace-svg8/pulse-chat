@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: anyone authenticated can read profiles; only the owner can write
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Rooms: any authenticated user can read; any authenticated user can create
+    match /rooms/{roomId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Messages: any authenticated user can read & create in a room
+    match /messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Direct Messages: sender or receiver can read; only sender can create
+    match /directMessages/{dmId} {
+      allow read: if request.auth != null
+        && (resource.data.senderId == request.auth.uid
+            || resource.data.receiverId == request.auth.uid);
+      allow create: if request.auth != null
+        && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if false;
+    }
+  }
+}

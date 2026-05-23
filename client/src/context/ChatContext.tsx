@@ -3,8 +3,8 @@
 // =============================================
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import { collection, doc, setDoc, getDoc, addDoc, onSnapshot, query, where, orderBy, updateDoc, getDocs, limit, or } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { collection, doc, setDoc, getDoc, addDoc, onSnapshot, query, where, orderBy, updateDoc, getDocs } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import {
   deriveKeyFromPassword,
@@ -87,6 +87,7 @@ interface ChatState {
   activeDMUser: User | null;
   chatMode: 'room' | 'dm';
   unreadDMs: Record<string, number>;
+  isLocked: boolean;
 }
 
 type ChatAction =
@@ -99,7 +100,8 @@ type ChatAction =
   | { type: 'SET_ACTIVE_DM_USER'; payload: User | null }
   | { type: 'SET_CHAT_MODE'; payload: 'room' | 'dm' }
   | { type: 'INCREMENT_UNREAD_DM'; payload: string }
-  | { type: 'CLEAR_UNREAD_DM'; payload: string };
+  | { type: 'CLEAR_UNREAD_DM'; payload: string }
+  | { type: 'SET_LOCKED'; payload: boolean };
 
 const initialState: ChatState = {
   currentUser: null,
@@ -114,6 +116,7 @@ const initialState: ChatState = {
   activeDMUser: null,
   chatMode: 'room',
   unreadDMs: {},
+  isLocked: false,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -166,6 +169,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         unreadDMs: { ...state.unreadDMs, [action.payload]: 0 },
       };
+    case 'SET_LOCKED':
+      return { ...state, isLocked: action.payload };
     default:
       return state;
   }
@@ -184,6 +189,7 @@ interface ChatContextType {
   openDM: (user: User) => void;
   startTyping: () => void;
   stopTyping: () => void;
+  unlock: (passwordRaw: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -201,10 +207,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // If privateKeyRef is already set, login() already handled user setup — don't overwrite.
+        if (privateKeyRef.current) return;
+
         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
           dispatch({ type: 'SET_USER', payload: userData });
+          dispatch({ type: 'SET_LOCKED', payload: true });
           // Set online
           await updateDoc(doc(db, 'users', firebaseUser.uid), { isOnline: true, lastSeen: new Date().toISOString() });
         }
@@ -213,6 +223,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() }).catch(() => {});
         }
         dispatch({ type: 'SET_USER', payload: null });
+        dispatch({ type: 'SET_LOCKED', payload: false });
         privateKeyRef.current = null;
       }
     });
@@ -246,7 +257,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_ROOMS', payload: rooms });
     });
 
-    const qUsers = query(collection(db, 'users'));
+    const qUsers = query(collection(db, 'users'), where('isOnline', '==', true));
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
       const users: User[] = [];
       snapshot.forEach(doc => users.push({ id: doc.id, ...doc.data() } as User));
@@ -278,26 +289,40 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return () => unsubMessages();
   }, [state.isAuthenticated, state.chatMode, state.activeRoom]);
 
-  // DMs Listener
+  // DMs Listener — uses two separate queries merged client-side to avoid
+  // the Firestore limitation of or()+orderBy() requiring an unsupported composite index.
   useEffect(() => {
     if (!state.isAuthenticated || !state.currentUser || !privateKeyRef.current) return;
 
-    const qDMs = query(
+    const me = state.currentUser.id;
+
+    // No orderBy — sort client-side to avoid composite index requirement
+    const qReceived = query(
       collection(db, 'directMessages'),
-      or(
-        where('receiverId', '==', state.currentUser.id),
-        where('senderId', '==', state.currentUser.id)
-      ),
-      orderBy('createdAt', 'asc')
+      where('receiverId', '==', me)
+    );
+    const qSent = query(
+      collection(db, 'directMessages'),
+      where('senderId', '==', me)
     );
 
-    const unsubDMs = onSnapshot(qDMs, async (snapshot) => {
-      const allDMs: DirectMessage[] = [];
-      snapshot.forEach(doc => allDMs.push({ id: doc.id, ...doc.data() } as DirectMessage));
+    // Merge and decrypt both snapshot streams
+    let receivedDMs: DirectMessage[] = [];
+    let sentDMs: DirectMessage[] = [];
 
+    const processAndDispatch = async () => {
       const privKey = privateKeyRef.current;
-      const me = stateRef.current.currentUser?.id;
-      
+      if (!privKey) return;
+
+      // Merge + de-duplicate by id
+      const merged = [...receivedDMs, ...sentDMs];
+      const seen = new Set<string>();
+      const allDMs = merged.filter(dm => {
+        if (seen.has(dm.id)) return false;
+        seen.add(dm.id);
+        return true;
+      }).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
       const decryptedMessages = await Promise.all(allDMs.map(async (dm) => {
         let decryptedContent = dm.content;
         if (privKey && dm.senderEncryptedKey && dm.receiverEncryptedKey && dm.iv) {
@@ -322,29 +347,55 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (stateRef.current.activeDMUser) {
         dispatch({ type: 'SET_DM_HISTORY', payload: { userId: stateRef.current.activeDMUser.id, messages: dmMap[stateRef.current.activeDMUser.id] || [] } });
       }
+    };
+
+    const unsubReceived = onSnapshot(qReceived, (snapshot) => {
+      receivedDMs = [];
+      snapshot.forEach(doc => receivedDMs.push({ id: doc.id, ...doc.data() } as DirectMessage));
+      processAndDispatch();
     });
 
-    return () => unsubDMs();
-  }, [state.isAuthenticated, state.currentUser]); 
+    const unsubSent = onSnapshot(qSent, (snapshot) => {
+      sentDMs = [];
+      snapshot.forEach(doc => sentDMs.push({ id: doc.id, ...doc.data() } as DirectMessage));
+      processAndDispatch();
+    });
+
+    return () => {
+      unsubReceived();
+      unsubSent();
+    };
+  }, [state.isAuthenticated, state.currentUser]);
 
   useEffect(() => {
     if (state.chatMode === 'dm' && state.activeDMUser) {
       const fetchDMs = async () => {
         if (!state.currentUser || !privateKeyRef.current) return;
-        const qDMs = query(
+        const me = state.currentUser.id;
+
+        // Two separate queries to avoid or()+orderBy() composite index requirement
+        // No orderBy — sort client-side to avoid composite index requirement
+        const qReceived = query(
           collection(db, 'directMessages'),
-          or(
-            where('receiverId', '==', state.currentUser.id),
-            where('senderId', '==', state.currentUser.id)
-          ),
-          orderBy('createdAt', 'asc')
+          where('receiverId', '==', me)
         );
-        const snap = await getDocs(qDMs);
+        const qSent = query(
+          collection(db, 'directMessages'),
+          where('senderId', '==', me)
+        );
+
+        const [snapReceived, snapSent] = await Promise.all([getDocs(qReceived), getDocs(qSent)]);
         const allDMs: DirectMessage[] = [];
-        snap.forEach(doc => allDMs.push({ id: doc.id, ...doc.data() } as DirectMessage));
+        const seen = new Set<string>();
+        [...snapReceived.docs, ...snapSent.docs].forEach(doc => {
+          if (!seen.has(doc.id)) {
+            seen.add(doc.id);
+            allDMs.push({ id: doc.id, ...doc.data() } as DirectMessage);
+          }
+        });
+        allDMs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
         const privKey = privateKeyRef.current;
-        const me = state.currentUser.id;
         
         const decryptedMessages = await Promise.all(allDMs.map(async (dm) => {
           let decryptedContent = dm.content;
@@ -426,6 +477,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_USER', payload: user });
   }, []);
 
+  const unlock = useCallback(async (passwordRaw: string) => {
+    const current = stateRef.current;
+    if (!current.currentUser) throw new Error('No user is logged in');
+
+    const userDoc = await getDoc(doc(db, 'users', current.currentUser.id));
+    if (!userDoc.exists()) throw new Error('User data not found');
+    
+    const userData = userDoc.data();
+    const pwdKey = await deriveKeyFromPassword(passwordRaw, current.currentUser.email);
+    const privateKey = await decryptPrivateKey(userData.encryptedPrivateKey, pwdKey);
+    privateKeyRef.current = privateKey;
+
+    dispatch({ type: 'SET_LOCKED', payload: false });
+  }, []);
+
   const logout = useCallback(async () => {
     if (stateRef.current.currentUser) {
       await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
@@ -435,22 +501,31 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = useCallback(async (content: string, type: 'text' | 'image' | 'file' = 'text', fileName?: string, fileSize?: number, fileUrl?: string) => {
     const current = stateRef.current;
-    if (!current.activeRoom || !current.currentUser) return;
+    if (!current.activeRoom || !current.currentUser) {
+      console.warn('sendMessage aborted: missing activeRoom or currentUser', { activeRoom: current.activeRoom, currentUser: current.currentUser });
+      return;
+    }
     
-    const msg: Omit<Message, 'id'> = {
+    // Firestore rejects `undefined` field values — only include optional fields when defined
+    const msg: Record<string, unknown> = {
       roomId: current.activeRoom,
       senderId: current.currentUser.id,
       senderName: current.currentUser.username,
       senderAvatar: current.currentUser.avatar,
       content,
       type,
-      fileName,
-      fileSize,
-      fileUrl,
       createdAt: new Date().toISOString()
     };
+    if (fileName !== undefined) msg.fileName = fileName;
+    if (fileSize !== undefined) msg.fileSize = fileSize;
+    if (fileUrl !== undefined) msg.fileUrl = fileUrl;
     
-    await addDoc(collection(db, 'messages'), msg);
+    try {
+      await addDoc(collection(db, 'messages'), msg);
+    } catch (err) {
+      console.error('Failed to send message', err, msg);
+      throw err;
+    }
   }, []);
 
   const joinRoom = useCallback((roomId: string, roomName: string) => {
@@ -474,15 +549,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const sendDM = useCallback(async (receiverId: string, content: string, type: 'text' | 'image' | 'file' = 'text', fileName?: string, fileSize?: number, fileUrl?: string) => {
     const current = stateRef.current;
-    if (!privateKeyRef.current || !current.currentUser?.publicKey) return;
+    if (!privateKeyRef.current || !current.currentUser?.publicKey) {
+      console.warn('sendDM aborted: missing private key or sender publicKey', { hasPrivateKey: !!privateKeyRef.current, senderPublicKey: current.currentUser?.publicKey });
+      return;
+    }
     
     const receiver = current.onlineUsers.find(u => u.id === receiverId);
-    if (!receiver || !receiver.publicKey) return;
+    if (!receiver) {
+      console.warn('sendDM aborted: receiver not found in onlineUsers', { receiverId });
+      return;
+    }
+    if (!receiver.publicKey) {
+      console.warn('sendDM aborted: receiver missing publicKey', { receiverId, receiver });
+      return;
+    }
     
     try {
       const encrypted = await encryptMessage(content, receiver.publicKey, current.currentUser.publicKey);
       
-      const dm: Omit<DirectMessage, 'id'> = {
+      // Firestore rejects `undefined` field values — only include optional fields when defined
+      const dm: Record<string, unknown> = {
         senderId: current.currentUser.id,
         senderName: current.currentUser.username,
         senderAvatar: current.currentUser.avatar,
@@ -493,16 +579,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         receiverEncryptedKey: encrypted.receiverEncryptedKey,
         iv: encrypted.iv,
         type,
-        fileName,
-        fileSize,
-        fileUrl,
         read: false,
         createdAt: new Date().toISOString()
       };
+      if (fileName !== undefined) dm.fileName = fileName;
+      if (fileSize !== undefined) dm.fileSize = fileSize;
+      if (fileUrl !== undefined) dm.fileUrl = fileUrl;
       
       await addDoc(collection(db, 'directMessages'), dm);
     } catch (err) {
-      console.error("Encryption failed", err);
+      console.error("Encryption failed or failed to send DM", err);
+      throw err;
     }
   }, []);
 
@@ -517,7 +604,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   return (
     <ChatContext.Provider
       value={{
-        state, dispatch, signup, login, logout, sendMessage, joinRoom, createRoom, sendDM, openDM, startTyping, stopTyping
+        state, dispatch, signup, login, logout, sendMessage, joinRoom, createRoom, sendDM, openDM, startTyping, stopTyping, unlock
       }}
     >
       {children}
