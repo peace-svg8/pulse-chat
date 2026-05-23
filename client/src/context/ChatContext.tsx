@@ -87,7 +87,6 @@ interface ChatState {
   activeDMUser: User | null;
   chatMode: 'room' | 'dm';
   unreadDMs: Record<string, number>;
-  isLocked: boolean;
 }
 
 type ChatAction =
@@ -100,8 +99,7 @@ type ChatAction =
   | { type: 'SET_ACTIVE_DM_USER'; payload: User | null }
   | { type: 'SET_CHAT_MODE'; payload: 'room' | 'dm' }
   | { type: 'INCREMENT_UNREAD_DM'; payload: string }
-  | { type: 'CLEAR_UNREAD_DM'; payload: string }
-  | { type: 'SET_LOCKED'; payload: boolean };
+  | { type: 'CLEAR_UNREAD_DM'; payload: string };
 
 const initialState: ChatState = {
   currentUser: null,
@@ -116,7 +114,6 @@ const initialState: ChatState = {
   activeDMUser: null,
   chatMode: 'room',
   unreadDMs: {},
-  isLocked: false,
 };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -169,8 +166,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         unreadDMs: { ...state.unreadDMs, [action.payload]: 0 },
       };
-    case 'SET_LOCKED':
-      return { ...state, isLocked: action.payload };
     default:
       return state;
   }
@@ -189,7 +184,6 @@ interface ChatContextType {
   openDM: (user: User) => void;
   startTyping: () => void;
   stopTyping: () => void;
-  unlock: (passwordRaw: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -210,20 +204,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         // If privateKeyRef is already set, login() already handled user setup — don't overwrite.
         if (privateKeyRef.current) return;
 
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data() as User;
-          dispatch({ type: 'SET_USER', payload: userData });
-          dispatch({ type: 'SET_LOCKED', payload: true });
-          // Set online
-          await updateDoc(doc(db, 'users', firebaseUser.uid), { isOnline: true, lastSeen: new Date().toISOString() });
-        }
+        // Session was restored by Firebase, but we don't have the private key in memory.
+        // Since the user prefers to just use the login page instead of an unlock screen,
+        // we sign them out to force a fresh login.
+        signOut(auth);
       } else {
         if (stateRef.current.currentUser) {
           await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() }).catch(() => {});
         }
         dispatch({ type: 'SET_USER', payload: null });
-        dispatch({ type: 'SET_LOCKED', payload: false });
         privateKeyRef.current = null;
       }
     });
@@ -477,21 +466,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_USER', payload: user });
   }, []);
 
-  const unlock = useCallback(async (passwordRaw: string) => {
-    const current = stateRef.current;
-    if (!current.currentUser) throw new Error('No user is logged in');
-
-    const userDoc = await getDoc(doc(db, 'users', current.currentUser.id));
-    if (!userDoc.exists()) throw new Error('User data not found');
-    
-    const userData = userDoc.data();
-    const pwdKey = await deriveKeyFromPassword(passwordRaw, current.currentUser.email);
-    const privateKey = await decryptPrivateKey(userData.encryptedPrivateKey, pwdKey);
-    privateKeyRef.current = privateKey;
-
-    dispatch({ type: 'SET_LOCKED', payload: false });
-  }, []);
-
   const logout = useCallback(async () => {
     if (stateRef.current.currentUser) {
       await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
@@ -604,7 +578,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   return (
     <ChatContext.Provider
       value={{
-        state, dispatch, signup, login, logout, sendMessage, joinRoom, createRoom, sendDM, openDM, startTyping, stopTyping, unlock
+        state, dispatch, signup, login, logout, sendMessage, joinRoom, createRoom, sendDM, openDM, startTyping, stopTyping
       }}
     >
       {children}

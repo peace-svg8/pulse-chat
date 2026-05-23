@@ -4,7 +4,6 @@
 
 import { ChatProvider, useChat } from './context/ChatContext';
 import AuthScreen from './components/AuthScreen';
-import UnlockScreen from './components/UnlockScreen';
 import ChatLayout from './components/ChatLayout';
 import './index.css';
 import './styles/auth.css';
@@ -18,10 +17,6 @@ function AppContent() {
 
   if (!state.isAuthenticated) {
     return <AuthScreen />;
-  }
-
-  if (state.isLocked) {
-    return <UnlockScreen />;
   }
 
   return <ChatLayout />;
