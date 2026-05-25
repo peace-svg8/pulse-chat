@@ -21,7 +21,7 @@ function getDateLabel(iso: string): string {
 }
 
 export default function ChatWindow() {
-  const { state } = useChat();
+  const { state, markAsRead } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showEmoji, setShowEmoji] = useState(false);
 
@@ -30,10 +30,18 @@ export default function ChatWindow() {
     ? (state.dmConversations[state.activeDMUser.id] || [])
     : state.messages;
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages and mark DMs as read
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+
+    if (isDM && state.currentUser) {
+      messages.forEach(msg => {
+        if ('read' in msg && !msg.read && msg.receiverId === state.currentUser!.id) {
+          markAsRead(msg.id);
+        }
+      });
+    }
+  }, [messages, isDM, state.currentUser, markAsRead]);
 
   const handleEmojiToggle = useCallback(() => {
     setShowEmoji((prev) => !prev);

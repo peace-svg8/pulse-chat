@@ -45,14 +45,37 @@ export default function Sidebar({ isOpen, onClose, onCreateRoom }: SidebarProps)
         </div>
         <div style={{ padding: '0 20px', marginBottom: '8px' }}>
           {currentUser && (
-            <div className="sidebar-user">
-              <div className="sidebar-user-avatar">{currentUser.avatar}</div>
-              <div>
-                <div className="sidebar-user-name">{currentUser.username}</div>
-                <div className="sidebar-user-status">
-                  <span className="status-dot" /> Online
+            <div className="sidebar-user" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div className="sidebar-user-avatar">{currentUser.avatar}</div>
+                <div>
+                  <div className="sidebar-user-name">{currentUser.username}</div>
+                  <div className="sidebar-user-status">
+                    <span className="status-dot" /> Online
+                  </div>
                 </div>
               </div>
+              <button 
+                onClick={logout} 
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: 'var(--danger)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'}
+                title="Log Out"
+              >
+                Log Out
+              </button>
             </div>
           )}
         </div>
@@ -122,13 +145,6 @@ export default function Sidebar({ isOpen, onClose, onCreateRoom }: SidebarProps)
               ))
             )}
           </div>
-        </div>
-        
-        {/* Footer */}
-        <div className="sidebar-footer">
-          <button className="logout-btn" onClick={logout}>
-            Log Out
-          </button>
         </div>
       </aside>
     </>

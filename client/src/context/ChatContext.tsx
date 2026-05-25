@@ -3,7 +3,7 @@
 // =============================================
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
-import { collection, doc, setDoc, getDoc, addDoc, onSnapshot, query, where, orderBy, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, addDoc, onSnapshot, query, where, orderBy, updateDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import {
@@ -47,6 +47,7 @@ export interface Message {
   fileName?: string;
   fileSize?: number;
   fileUrl?: string;
+  edited?: boolean;
   createdAt: string;
 }
 
@@ -66,6 +67,7 @@ export interface DirectMessage {
   fileSize?: number;
   fileUrl?: string;
   read: boolean;
+  edited?: boolean;
   createdAt: string;
 }
 
@@ -184,6 +186,9 @@ interface ChatContextType {
   openDM: (user: User) => void;
   startTyping: () => void;
   stopTyping: () => void;
+  markAsRead: (dmId: string) => Promise<void>;
+  editMessage: (messageId: string, isDM: boolean, newContent: string) => Promise<void>;
+  deleteMessage: (messageId: string, isDM: boolean) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | null>(null);
@@ -575,10 +580,70 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const startTyping = useCallback(() => {}, []);
   const stopTyping = useCallback(() => {}, []);
 
+  const markAsRead = useCallback(async (dmId: string) => {
+    try {
+      await updateDoc(doc(db, 'directMessages', dmId), { read: true });
+    } catch (err) {
+      console.error('Failed to mark DM as read', err);
+    }
+  }, []);
+
+  const editMessage = useCallback(async (messageId: string, isDM: boolean, newContent: string) => {
+    const current = stateRef.current;
+    try {
+      if (isDM) {
+        let dmToEdit: DirectMessage | undefined;
+        for (const dms of Object.values(current.dmConversations)) {
+          dmToEdit = dms.find(dm => dm.id === messageId);
+          if (dmToEdit) break;
+        }
+        
+        if (!dmToEdit) throw new Error("DM not found in state");
+        
+        const receiverId = dmToEdit.senderId === current.currentUser?.id ? dmToEdit.receiverId : dmToEdit.senderId;
+        const receiver = current.onlineUsers.find(u => u.id === receiverId) || await getDoc(doc(db, 'users', receiverId)).then(d => d.data() as User);
+        
+        if (!receiver?.publicKey || !current.currentUser?.publicKey) throw new Error("Missing public keys");
+        
+        const encrypted = await encryptMessage(newContent, receiver.publicKey, current.currentUser.publicKey);
+        
+        await updateDoc(doc(db, 'directMessages', messageId), {
+          content: encrypted.content,
+          senderEncryptedKey: encrypted.senderEncryptedKey,
+          receiverEncryptedKey: encrypted.receiverEncryptedKey,
+          iv: encrypted.iv,
+          edited: true
+        });
+      } else {
+        await updateDoc(doc(db, 'messages', messageId), {
+          content: newContent,
+          edited: true
+        });
+      }
+    } catch (err) {
+      console.error('Failed to edit message', err);
+      throw err;
+    }
+  }, []);
+
+  const deleteMessage = useCallback(async (messageId: string, isDM: boolean) => {
+    try {
+      if (isDM) {
+        await deleteDoc(doc(db, 'directMessages', messageId));
+      } else {
+        await deleteDoc(doc(db, 'messages', messageId));
+      }
+    } catch (err) {
+      console.error('Failed to delete message', err);
+      throw err;
+    }
+  }, []);
+
   return (
     <ChatContext.Provider
       value={{
-        state, dispatch, signup, login, logout, sendMessage, joinRoom, createRoom, sendDM, openDM, startTyping, stopTyping
+        state, dispatch, signup, login, logout, sendMessage, joinRoom, createRoom, sendDM, openDM, startTyping, stopTyping,
+        markAsRead, editMessage, deleteMessage
       }}
     >
       {children}

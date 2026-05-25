@@ -385,3 +385,5 @@
   }
 }
 
+
+.message-wrapper:hover .message-actions { opacity: 1 !important; }

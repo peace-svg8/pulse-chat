@@ -2,7 +2,7 @@
 // MessageInput — Text + File + Emoji
 // =============================================
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useChat } from '../context/ChatContext';
 
 
@@ -65,9 +65,16 @@ export default function MessageInput({ onEmojiToggle, showEmoji }: Props) {
   const removePendingFile = () => setPendingFile(null);
 
   // Insert emoji into text
-  const insertEmoji = (emoji: string) => {
+  const insertEmoji = useCallback((emoji: string) => {
     setText((prev) => prev + emoji);
-  };
+  }, []);
+
+  useEffect(() => {
+    (window as any).__insertEmoji = insertEmoji;
+    return () => {
+      delete (window as any).__insertEmoji;
+    };
+  }, [insertEmoji]);
 
   const placeholder = state.chatMode === 'dm' && state.activeDMUser
     ? `Message ${state.activeDMUser.username}...`

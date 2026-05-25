@@ -1,7 +1,4 @@
-// =============================================
-// MessageBubble — Individual Message Display
-// =============================================
-
+import { useState } from 'react';
 import { useChat } from '../context/ChatContext';
 import type { Message, DirectMessage } from '../context/ChatContext';
 
@@ -24,8 +21,11 @@ function formatFileSize(bytes?: number): string {
 
 const SERVER = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
-export default function MessageBubble({ message, isDM }: Props) {
-  const { state } = useChat();
+export default function MessageBubble({ message, isDM = false }: Props) {
+  const { state, editMessage, deleteMessage } = useChat();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+
   const isOwn = message.senderId === state.currentUser?.id;
   const isSystem = 'type' in message && (message as Message).type === 'system';
 
@@ -39,16 +39,43 @@ export default function MessageBubble({ message, isDM }: Props) {
     );
   }
 
+  const handleSaveEdit = () => {
+    if (editContent.trim() && editContent !== message.content) {
+      editMessage(message.id, isDM, editContent.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditContent(message.content);
+    setIsEditing(false);
+  };
+
   return (
     <div className={`message-wrapper ${isOwn ? 'own' : ''}`}>
       {!isOwn && (
         <div className="message-avatar">{message.senderAvatar}</div>
       )}
-      <div>
+      <div className="message-content-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        
+        {isOwn && !isEditing && (
+          <div className="message-actions" style={{
+            marginRight: '8px',
+            display: 'flex',
+            gap: '4px',
+            opacity: 0,
+            transition: 'opacity 0.2s'
+          }}>
+            <button onClick={() => setIsEditing(true)} title="Edit" style={{ background: 'rgba(0,0,0,0.3)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', fontSize: '12px' }}>✏️</button>
+            <button onClick={() => deleteMessage(message.id, isDM)} title="Delete" style={{ background: 'rgba(0,0,0,0.3)', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', fontSize: '12px' }}>🗑️</button>
+          </div>
+        )}
+
         <div className="message-bubble">
           {!isOwn && (
             <p className="message-sender">{message.senderName}</p>
           )}
+          
           {message.type === 'image' && message.fileUrl && (
             <img
               className="message-image"
@@ -57,6 +84,7 @@ export default function MessageBubble({ message, isDM }: Props) {
               loading="lazy"
             />
           )}
+          
           {message.type === 'file' && message.fileUrl && (
             <a
               className="message-file"
@@ -72,13 +100,42 @@ export default function MessageBubble({ message, isDM }: Props) {
               <span style={{ fontSize: '14px', color: 'var(--accent-primary)' }}>⬇</span>
             </a>
           )}
-          {message.content && message.type !== 'image' && (
-            <p className="message-content">{message.content}</p>
+          
+          {message.type !== 'image' && (
+            isEditing ? (
+              <div className="message-edit-mode" style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '200px' }}>
+                <textarea 
+                  value={editContent} 
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="chat-input"
+                  style={{ minHeight: '60px', padding: '8px', borderRadius: '4px', color: 'var(--text-primary)', background: 'rgba(255,255,255,0.1)' }}
+                  autoFocus
+                />
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button onClick={handleCancelEdit} style={{ background: 'transparent', color: '#fff', border: '1px solid #555', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleSaveEdit} style={{ background: 'var(--accent-primary)', color: '#fff', border: 'none', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}>Save</button>
+                </div>
+              </div>
+            ) : (
+              <p className="message-content">{message.content}</p>
+            )
           )}
-          <div className="message-meta">
-            <span className="message-time">{formatTime(message.createdAt)}</span>
-          </div>
+
+          {!isEditing && (
+            <div className="message-meta">
+              <span className="message-time">
+                {message.edited && <span style={{ fontStyle: 'italic', marginRight: '4px', opacity: 0.8 }}>(edited)</span>}
+                {formatTime(message.createdAt)}
+                {isDM && isOwn && 'read' in message && (
+                  <span style={{ marginLeft: '4px', color: message.read ? '#34B7F1' : '#9ca3af', fontSize: '14px', fontWeight: 'bold' }}>
+                    ✓✓
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
+
       </div>
       {isOwn && (
         <div className="message-avatar">{message.senderAvatar}</div>
