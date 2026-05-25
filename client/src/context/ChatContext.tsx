@@ -196,6 +196,7 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const privateKeyRef = useRef<CryptoKey | null>(null);
+  const isAuthenticatingRef = useRef(false);
   const stateRef = useRef(state);
   
   useEffect(() => {
@@ -206,8 +207,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // If privateKeyRef is already set, login() already handled user setup — don't overwrite.
-        if (privateKeyRef.current) return;
+        // If privateKeyRef is already set or we are in the middle of login/signup, don't overwrite/logout.
+        if (privateKeyRef.current || isAuthenticatingRef.current) return;
 
         // Session was restored by Firebase, but we don't have the private key in memory.
         // Since the user prefers to just use the login page instead of an unlock screen,
@@ -415,65 +416,79 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Actions
   const signup = useCallback(async (email: string, username: string, passwordRaw: string, avatar: string) => {
-    const keyPair = await generateRSAKeyPair();
-    const publicKeyStr = await exportPublicKey(keyPair.publicKey);
-    const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
-    const encryptedPrivKeyStr = await encryptPrivateKey(keyPair.privateKey, pwdKey);
+    isAuthenticatingRef.current = true;
+    try {
+      const keyPair = await generateRSAKeyPair();
+      const publicKeyStr = await exportPublicKey(keyPair.publicKey);
+      const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
+      const encryptedPrivKeyStr = await encryptPrivateKey(keyPair.privateKey, pwdKey);
 
-    const userCredential = await createUserWithEmailAndPassword(auth, email, passwordRaw);
-    const uid = userCredential.user.uid;
+      const userCredential = await createUserWithEmailAndPassword(auth, email, passwordRaw);
+      const uid = userCredential.user.uid;
 
-    const user: User = {
-      id: uid,
-      email,
-      username,
-      avatar,
-      publicKey: publicKeyStr,
-      isOnline: true,
-      lastSeen: new Date().toISOString(),
-      createdAt: new Date().toISOString()
-    };
+      const user: User = {
+        id: uid,
+        email,
+        username,
+        avatar,
+        publicKey: publicKeyStr,
+        isOnline: true,
+        lastSeen: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      };
 
-    await setDoc(doc(db, 'users', uid), {
-      ...user,
-      encryptedPrivateKey: encryptedPrivKeyStr
-    });
+      await setDoc(doc(db, 'users', uid), {
+        ...user,
+        encryptedPrivateKey: encryptedPrivKeyStr
+      });
 
-    privateKeyRef.current = keyPair.privateKey;
-    dispatch({ type: 'SET_USER', payload: user });
+      privateKeyRef.current = keyPair.privateKey;
+      dispatch({ type: 'SET_USER', payload: user });
+    } finally {
+      isAuthenticatingRef.current = false;
+    }
   }, []);
 
   const login = useCallback(async (email: string, passwordRaw: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, passwordRaw);
-    const uid = userCredential.user.uid;
+    isAuthenticatingRef.current = true;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, passwordRaw);
+      const uid = userCredential.user.uid;
 
-    const userDoc = await getDoc(doc(db, 'users', uid));
-    if (!userDoc.exists()) throw new Error('User data not found');
-    
-    const userData = userDoc.data();
-    
-    const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
-    const privateKey = await decryptPrivateKey(userData.encryptedPrivateKey, pwdKey);
-    privateKeyRef.current = privateKey;
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (!userDoc.exists()) throw new Error('User data not found');
+      
+      const userData = userDoc.data();
+      
+      const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
+      const privateKey = await decryptPrivateKey(userData.encryptedPrivateKey, pwdKey);
+      privateKeyRef.current = privateKey;
 
-    const user: User = {
-      id: userData.id,
-      email: userData.email,
-      username: userData.username,
-      avatar: userData.avatar,
-      isOnline: true,
-      lastSeen: new Date().toISOString(),
-      createdAt: userData.createdAt,
-      publicKey: userData.publicKey
-    };
+      const user: User = {
+        id: userData.id,
+        email: userData.email,
+        username: userData.username,
+        avatar: userData.avatar,
+        isOnline: true,
+        lastSeen: new Date().toISOString(),
+        createdAt: userData.createdAt,
+        publicKey: userData.publicKey
+      };
 
-    await updateDoc(doc(db, 'users', uid), { isOnline: true, lastSeen: new Date().toISOString() });
-    dispatch({ type: 'SET_USER', payload: user });
+      await updateDoc(doc(db, 'users', uid), { isOnline: true, lastSeen: new Date().toISOString() });
+      dispatch({ type: 'SET_USER', payload: user });
+    } finally {
+      isAuthenticatingRef.current = false;
+    }
   }, []);
 
   const logout = useCallback(async () => {
     if (stateRef.current.currentUser) {
-      await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
+      try {
+        await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
+      } catch (err) {
+        console.error("Failed to update offline status during logout", err);
+      }
     }
     await signOut(auth);
   }, []);

@@ -45,11 +45,11 @@ export default function Sidebar({ isOpen, onClose, onCreateRoom }: SidebarProps)
         </div>
         <div style={{ padding: '0 20px', marginBottom: '8px' }}>
           {currentUser && (
-            <div className="sidebar-user" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <div className="sidebar-user-avatar">{currentUser.avatar}</div>
-                <div>
-                  <div className="sidebar-user-name">{currentUser.username}</div>
+            <div className="sidebar-user" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', minWidth: 0, flex: 1, paddingRight: '8px' }}>
+                <div className="sidebar-user-avatar" style={{ flexShrink: 0 }}>{currentUser.avatar}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="sidebar-user-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser.username}</div>
                   <div className="sidebar-user-status">
                     <span className="status-dot" /> Online
                   </div>
