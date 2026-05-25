@@ -196,9 +196,8 @@ const ChatContext = createContext<ChatContextType | null>(null);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const privateKeyRef = useRef<CryptoKey | null>(null);
-  const isAuthenticatingRef = useRef(false);
   const stateRef = useRef(state);
-  
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -207,8 +206,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // If privateKeyRef is already set or we are in the middle of login/signup, don't overwrite/logout.
-        if (privateKeyRef.current || isAuthenticatingRef.current) return;
+        // If privateKeyRef is already set, login() already handled user setup — don't overwrite.
+        if (privateKeyRef.current) return;
 
         // Session was restored by Firebase, but we don't have the private key in memory.
         // Since the user prefers to just use the login page instead of an unlock screen,
@@ -216,7 +215,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         signOut(auth);
       } else {
         if (stateRef.current.currentUser) {
-          await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() }).catch(() => {});
+          await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() }).catch(() => { });
         }
         dispatch({ type: 'SET_USER', payload: null });
         privateKeyRef.current = null;
@@ -246,7 +245,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const unsubRooms = onSnapshot(qRooms, (snapshot) => {
       const rooms: Room[] = [];
       snapshot.forEach(doc => rooms.push({ id: doc.id, ...doc.data() } as Room));
-      
+
       // If no rooms exist yet, we might want to create a default one, 
       // but let's assume one is created from the console or earlier.
       dispatch({ type: 'SET_ROOMS', payload: rooms });
@@ -391,7 +390,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         allDMs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
         const privKey = privateKeyRef.current;
-        
+
         const decryptedMessages = await Promise.all(allDMs.map(async (dm) => {
           let decryptedContent = dm.content;
           if (privKey && dm.senderEncryptedKey && dm.receiverEncryptedKey && dm.iv) {
@@ -416,79 +415,65 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Actions
   const signup = useCallback(async (email: string, username: string, passwordRaw: string, avatar: string) => {
-    isAuthenticatingRef.current = true;
-    try {
-      const keyPair = await generateRSAKeyPair();
-      const publicKeyStr = await exportPublicKey(keyPair.publicKey);
-      const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
-      const encryptedPrivKeyStr = await encryptPrivateKey(keyPair.privateKey, pwdKey);
+    const keyPair = await generateRSAKeyPair();
+    const publicKeyStr = await exportPublicKey(keyPair.publicKey);
+    const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
+    const encryptedPrivKeyStr = await encryptPrivateKey(keyPair.privateKey, pwdKey);
 
-      const userCredential = await createUserWithEmailAndPassword(auth, email, passwordRaw);
-      const uid = userCredential.user.uid;
+    const userCredential = await createUserWithEmailAndPassword(auth, email, passwordRaw);
+    const uid = userCredential.user.uid;
 
-      const user: User = {
-        id: uid,
-        email,
-        username,
-        avatar,
-        publicKey: publicKeyStr,
-        isOnline: true,
-        lastSeen: new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      };
+    const user: User = {
+      id: uid,
+      email,
+      username,
+      avatar,
+      publicKey: publicKeyStr,
+      isOnline: true,
+      lastSeen: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
 
-      await setDoc(doc(db, 'users', uid), {
-        ...user,
-        encryptedPrivateKey: encryptedPrivKeyStr
-      });
+    await setDoc(doc(db, 'users', uid), {
+      ...user,
+      encryptedPrivateKey: encryptedPrivKeyStr
+    });
 
-      privateKeyRef.current = keyPair.privateKey;
-      dispatch({ type: 'SET_USER', payload: user });
-    } finally {
-      isAuthenticatingRef.current = false;
-    }
+    privateKeyRef.current = keyPair.privateKey;
+    dispatch({ type: 'SET_USER', payload: user });
   }, []);
 
   const login = useCallback(async (email: string, passwordRaw: string) => {
-    isAuthenticatingRef.current = true;
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, passwordRaw);
-      const uid = userCredential.user.uid;
+    const userCredential = await signInWithEmailAndPassword(auth, email, passwordRaw);
+    const uid = userCredential.user.uid;
 
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (!userDoc.exists()) throw new Error('User data not found');
-      
-      const userData = userDoc.data();
-      
-      const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
-      const privateKey = await decryptPrivateKey(userData.encryptedPrivateKey, pwdKey);
-      privateKeyRef.current = privateKey;
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    if (!userDoc.exists()) throw new Error('User data not found');
 
-      const user: User = {
-        id: userData.id,
-        email: userData.email,
-        username: userData.username,
-        avatar: userData.avatar,
-        isOnline: true,
-        lastSeen: new Date().toISOString(),
-        createdAt: userData.createdAt,
-        publicKey: userData.publicKey
-      };
+    const userData = userDoc.data();
 
-      await updateDoc(doc(db, 'users', uid), { isOnline: true, lastSeen: new Date().toISOString() });
-      dispatch({ type: 'SET_USER', payload: user });
-    } finally {
-      isAuthenticatingRef.current = false;
-    }
+    const pwdKey = await deriveKeyFromPassword(passwordRaw, email);
+    const privateKey = await decryptPrivateKey(userData.encryptedPrivateKey, pwdKey);
+    privateKeyRef.current = privateKey;
+
+    const user: User = {
+      id: userData.id,
+      email: userData.email,
+      username: userData.username,
+      avatar: userData.avatar,
+      isOnline: true,
+      lastSeen: new Date().toISOString(),
+      createdAt: userData.createdAt,
+      publicKey: userData.publicKey
+    };
+
+    await updateDoc(doc(db, 'users', uid), { isOnline: true, lastSeen: new Date().toISOString() });
+    dispatch({ type: 'SET_USER', payload: user });
   }, []);
 
   const logout = useCallback(async () => {
     if (stateRef.current.currentUser) {
-      try {
-        await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
-      } catch (err) {
-        console.error("Failed to update offline status during logout", err);
-      }
+      await updateDoc(doc(db, 'users', stateRef.current.currentUser.id), { isOnline: false, lastSeen: new Date().toISOString() });
     }
     await signOut(auth);
   }, []);
@@ -499,7 +484,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       console.warn('sendMessage aborted: missing activeRoom or currentUser', { activeRoom: current.activeRoom, currentUser: current.currentUser });
       return;
     }
-    
+
     // Firestore rejects `undefined` field values — only include optional fields when defined
     const msg: Record<string, unknown> = {
       roomId: current.activeRoom,
@@ -513,7 +498,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (fileName !== undefined) msg.fileName = fileName;
     if (fileSize !== undefined) msg.fileSize = fileSize;
     if (fileUrl !== undefined) msg.fileUrl = fileUrl;
-    
+
     try {
       await addDoc(collection(db, 'messages'), msg);
     } catch (err) {
@@ -529,7 +514,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const createRoom = useCallback(async (name: string, description: string) => {
     const current = stateRef.current;
     if (!current.currentUser) return;
-    
+
     const room: Omit<Room, 'id'> = {
       name,
       description,
@@ -537,7 +522,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
       isDefault: false
     };
-    
+
     await addDoc(collection(db, 'rooms'), room);
   }, []);
 
@@ -547,7 +532,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       console.warn('sendDM aborted: missing private key or sender publicKey', { hasPrivateKey: !!privateKeyRef.current, senderPublicKey: current.currentUser?.publicKey });
       return;
     }
-    
+
     const receiver = current.onlineUsers.find(u => u.id === receiverId);
     if (!receiver) {
       console.warn('sendDM aborted: receiver not found in onlineUsers', { receiverId });
@@ -557,10 +542,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       console.warn('sendDM aborted: receiver missing publicKey', { receiverId, receiver });
       return;
     }
-    
+
     try {
       const encrypted = await encryptMessage(content, receiver.publicKey, current.currentUser.publicKey);
-      
+
       // Firestore rejects `undefined` field values — only include optional fields when defined
       const dm: Record<string, unknown> = {
         senderId: current.currentUser.id,
@@ -579,7 +564,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (fileName !== undefined) dm.fileName = fileName;
       if (fileSize !== undefined) dm.fileSize = fileSize;
       if (fileUrl !== undefined) dm.fileUrl = fileUrl;
-      
+
       await addDoc(collection(db, 'directMessages'), dm);
     } catch (err) {
       console.error("Encryption failed or failed to send DM", err);
@@ -592,36 +577,38 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'CLEAR_UNREAD_DM', payload: user.id });
   }, []);
 
-  const startTyping = useCallback(() => {}, []);
-  const stopTyping = useCallback(() => {}, []);
+  const startTyping = useCallback(() => { }, []);
+  const stopTyping = useCallback(() => { }, []);
 
   const markAsRead = useCallback(async (dmId: string) => {
     try {
       await updateDoc(doc(db, 'directMessages', dmId), { read: true });
     } catch (err) {
-      console.error('Failed to mark DM as read', err);
+      console.error('Failed to mark as read', err);
+    }
+  }, []);
+
+  const deleteMessage = useCallback(async (messageId: string, isDM: boolean) => {
+    try {
+      await deleteDoc(doc(db, isDM ? 'directMessages' : 'messages', messageId));
+    } catch (err) {
+      console.error('Failed to delete message', err);
     }
   }, []);
 
   const editMessage = useCallback(async (messageId: string, isDM: boolean, newContent: string) => {
     const current = stateRef.current;
+    if (!current.currentUser) return;
+
     try {
-      if (isDM) {
-        let dmToEdit: DirectMessage | undefined;
-        for (const dms of Object.values(current.dmConversations)) {
-          dmToEdit = dms.find(dm => dm.id === messageId);
-          if (dmToEdit) break;
-        }
-        
-        if (!dmToEdit) throw new Error("DM not found in state");
-        
-        const receiverId = dmToEdit.senderId === current.currentUser?.id ? dmToEdit.receiverId : dmToEdit.senderId;
-        const receiver = current.onlineUsers.find(u => u.id === receiverId) || await getDoc(doc(db, 'users', receiverId)).then(d => d.data() as User);
-        
-        if (!receiver?.publicKey || !current.currentUser?.publicKey) throw new Error("Missing public keys");
-        
-        const encrypted = await encryptMessage(newContent, receiver.publicKey, current.currentUser.publicKey);
-        
+      if (!isDM) {
+        await updateDoc(doc(db, 'messages', messageId), { content: newContent, edited: true });
+      } else {
+        if (!privateKeyRef.current) return;
+        const otherUser = current.activeDMUser;
+        if (!otherUser || !otherUser.publicKey || !current.currentUser.publicKey) return;
+
+        const encrypted = await encryptMessage(newContent, otherUser.publicKey, current.currentUser.publicKey);
         await updateDoc(doc(db, 'directMessages', messageId), {
           content: encrypted.content,
           senderEncryptedKey: encrypted.senderEncryptedKey,
@@ -629,27 +616,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           iv: encrypted.iv,
           edited: true
         });
-      } else {
-        await updateDoc(doc(db, 'messages', messageId), {
-          content: newContent,
-          edited: true
-        });
       }
     } catch (err) {
       console.error('Failed to edit message', err);
-      throw err;
-    }
-  }, []);
-
-  const deleteMessage = useCallback(async (messageId: string, isDM: boolean) => {
-    try {
-      if (isDM) {
-        await deleteDoc(doc(db, 'directMessages', messageId));
-      } else {
-        await deleteDoc(doc(db, 'messages', messageId));
-      }
-    } catch (err) {
-      console.error('Failed to delete message', err);
       throw err;
     }
   }, []);
